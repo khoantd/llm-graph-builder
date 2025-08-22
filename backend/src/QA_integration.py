@@ -46,12 +46,27 @@ class SessionChatHistory:
     @classmethod
     def get_chat_history(cls, session_id):
         """Retrieve or create chat message history for a given session ID."""
-        if session_id not in cls.history_dict:
-            logging.info(f"Creating new ChatMessageHistory Local for session ID: {session_id}")
+        try:
+            if session_id not in cls.history_dict:
+                logging.info(f"Creating new ChatMessageHistory Local for session ID: {session_id}")
+                cls.history_dict[session_id] = ChatMessageHistory()
+            else:
+                logging.info(f"Retrieved existing ChatMessageHistory Local for session ID: {session_id}")
+                # Validate existing history
+                try:
+                    # Test if the history can be accessed without errors
+                    test_messages = cls.history_dict[session_id].messages
+                    logging.info(f"Successfully validated history for session {session_id}")
+                except Exception as e:
+                    logging.warning(f"Corrupted history detected for session {session_id}, creating fresh history: {e}")
+                    cls.history_dict[session_id] = ChatMessageHistory()
+            
+            return cls.history_dict[session_id]
+        except Exception as e:
+            logging.error(f"Error in get_chat_history for session {session_id}: {e}")
+            # Return a fresh history if there's any error
             cls.history_dict[session_id] = ChatMessageHistory()
-        else:
-            logging.info(f"Retrieved existing ChatMessageHistory Local for session ID: {session_id}")
-        return cls.history_dict[session_id]
+            return cls.history_dict[session_id]
 
 class CustomCallback(BaseCallbackHandler):
 
@@ -637,7 +652,8 @@ def create_neo4j_chat_message_history(graph, session_id, write_access=True):
 
     except Exception as e:
         logging.error(f"Error creating Neo4jChatMessageHistory: {e}")
-        raise 
+        # Return a fresh history object if there's an error
+        return ChatMessageHistory()
 
 def get_chat_mode_settings(mode,settings_map=CHAT_MODE_CONFIG_MAP):
     default_settings = settings_map[CHAT_DEFAULT_MODE]
@@ -653,11 +669,46 @@ def get_chat_mode_settings(mode,settings_map=CHAT_MODE_CONFIG_MAP):
 
     return chat_mode_settings
     
+def validate_and_clean_messages(history):
+    """
+    Validates and cleans chat messages to remove invalid entries.
+    
+    Args:
+        history: ChatMessageHistory object
+        
+    Returns:
+        list: Cleaned list of valid messages
+    """
+    try:
+        messages = history.messages
+        valid_messages = []
+        
+        for message in messages:
+            # Check if message has required attributes
+            if hasattr(message, 'type') and message.type is not None:
+                valid_messages.append(message)
+            else:
+                logging.warning(f"Skipping invalid message: {message}")
+                
+        return valid_messages
+    except Exception as e:
+        logging.error(f"Error validating messages: {e}")
+        # Return empty list if validation fails
+        return []
+
 def QA_RAG(graph,model, question, document_names, session_id, mode, write_access=True):
     logging.info(f"Chat Mode: {mode}")
 
     history = create_neo4j_chat_message_history(graph, session_id, write_access)
-    messages = history.messages
+    
+    # Validate and clean messages to prevent None message type errors
+    try:
+        messages = validate_and_clean_messages(history)
+    except Exception as e:
+        logging.error(f"Error accessing chat history messages: {e}")
+        # Create fresh history if there's an error
+        history = ChatMessageHistory()
+        messages = []
 
     user_question = HumanMessage(content=question)
     messages.append(user_question)
