@@ -643,8 +643,14 @@ class SafeNeo4jChatMessageHistory:
     
     def __init__(self, graph, session_id):
         self.neo4j_history = Neo4jChatMessageHistory(graph=graph, session_id=session_id)
+        self._session_id = session_id  # Store session_id explicitly
         self._cached_messages = None
         self._messages_validated = False
+    
+    @property
+    def session_id(self):
+        """Return the session ID."""
+        return self._session_id
     
     def _validate_and_cache_messages(self):
         """Validate and cache messages to avoid repeated validation errors."""
@@ -660,15 +666,15 @@ class SafeNeo4jChatMessageHistory:
                 if message and hasattr(message, 'type') and message.type is not None:
                     valid_messages.append(message)
                 else:
-                    logging.warning(f"Skipping invalid message in session {self.neo4j_history.session_id}: {message}")
+                    logging.warning(f"Skipping invalid message in session {self._session_id}: {message}")
             
             self._cached_messages = valid_messages
             self._messages_validated = True
-            logging.info(f"Successfully validated {len(valid_messages)} messages for session {self.neo4j_history.session_id}")
+            logging.info(f"Successfully validated {len(valid_messages)} messages for session {self._session_id}")
             return valid_messages
             
         except Exception as e:
-            logging.error(f"Error validating messages for session {self.neo4j_history.session_id}: {e}")
+            logging.error(f"Error validating messages for session {self._session_id}: {e}")
             self._cached_messages = []
             self._messages_validated = True
             return []
@@ -815,8 +821,24 @@ def QA_RAG(graph,model, question, document_names, session_id, mode, write_access
         result = process_graph_response(model, graph, question, messages, history)
     else:
         chat_mode_settings = get_chat_mode_settings(mode=mode)
-        document_names= list(map(str.strip, json.loads(document_names)))
-        if document_names and not chat_mode_settings["document_filter"]:
+        
+        # Safely parse document_names with proper validation
+        try:
+            if document_names is None:
+                document_names = "[]"
+            elif isinstance(document_names, str):
+                if not document_names.strip():
+                    document_names = "[]"
+            else:
+                document_names = "[]"
+                
+            parsed_document_names = list(map(str.strip, json.loads(document_names)))
+            logging.info(f"Parsed document_names: {parsed_document_names}")
+        except (json.JSONDecodeError, TypeError, ValueError) as e:
+            logging.warning(f"Error parsing document_names '{document_names}': {e}. Using empty list.")
+            parsed_document_names = []
+        
+        if parsed_document_names and not chat_mode_settings["document_filter"]:
             result =  {
                 "session_id": "",  
                 "message": "Please deselect all documents in the table before using this chat mode",
@@ -833,7 +855,7 @@ def QA_RAG(graph,model, question, document_names, session_id, mode, write_access
                 "user": "chatbot"
             }
         else:
-            result = process_chat_response(messages,history, question, model, graph, document_names,chat_mode_settings)
+            result = process_chat_response(messages,history, question, model, graph, parsed_document_names,chat_mode_settings)
 
     result["session_id"] = session_id
     
