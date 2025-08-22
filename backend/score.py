@@ -1111,5 +1111,192 @@ async def get_schema_visualization(uri=Form(None), userName=Form(None), password
     finally:
         gc.collect()
 
+@app.post("/get_chat_histories")
+async def get_chat_histories_api(
+    uri: str = Form(None),
+    userName: str = Form(None),
+    password: str = Form(None),
+    database: str = Form(None),
+    limit: int = Form(50),
+    offset: int = Form(0),
+    email=Form(None)
+):
+    """
+    Get all chat histories with pagination support.
+    """
+    try:
+        start = time.time()
+        
+        # Validate required parameters
+        if not uri or not userName or not password or not database:
+            return create_api_response(
+                'Failed', 
+                message="Missing required parameters: uri, userName, password, database",
+                error="Required parameters are missing"
+            )
+        
+        # Validate pagination parameters
+        if limit < 1 or limit > 100:
+            return create_api_response(
+                'Failed',
+                message="Invalid limit parameter. Must be between 1 and 100",
+                error="Invalid limit parameter"
+            )
+        
+        if offset < 0:
+            return create_api_response(
+                'Failed',
+                message="Invalid offset parameter. Must be 0 or greater",
+                error="Invalid offset parameter"
+            )
+        
+        graph = create_graph_database_connection(uri, userName, password, database)
+        result = await asyncio.to_thread(get_chat_histories, graph=graph, limit=limit, offset=offset)
+        
+        end = time.time()
+        elapsed_time = end - start
+        
+        json_obj = {
+            'api_name': 'get_chat_histories',
+            'db_url': uri,
+            'userName': userName,
+            'database': database,
+            'limit': limit,
+            'offset': offset,
+            'logging_time': formatted_time(datetime.now(timezone.utc)),
+            'elapsed_api_time': f'{elapsed_time:.2f}',
+            'email': email
+        }
+        logger.log_struct(json_obj, "INFO")
+        
+        return create_api_response('Success', data=result, message=f"Retrieved {len(result['chat_histories'])} chat histories")
+        
+    except Exception as e:
+        job_status = "Failed"
+        message = "Unable to retrieve chat histories"
+        error_message = str(e)
+        logging.exception(f'Exception in get_chat_histories: {error_message}')
+        return create_api_response(job_status, message=message, error=error_message)
+    finally:
+        gc.collect()
+
+@app.post("/get_chat_history")
+async def get_chat_history_api(
+    uri: str = Form(None),
+    userName: str = Form(None),
+    password: str = Form(None),
+    database: str = Form(None),
+    session_id: str = Form(None),
+    email=Form(None)
+):
+    """
+    Get a specific chat history by session ID.
+    """
+    try:
+        start = time.time()
+        
+        # Validate required parameters
+        if not uri or not userName or not password or not database:
+            return create_api_response(
+                'Failed', 
+                message="Missing required parameters: uri, userName, password, database",
+                error="Required parameters are missing"
+            )
+        
+        if not session_id:
+            return create_api_response(
+                'Failed',
+                message="Missing required parameter: session_id",
+                error="Session ID is required"
+            )
+        
+        graph = create_graph_database_connection(uri, userName, password, database)
+        result = await asyncio.to_thread(get_chat_history_by_session_id, graph=graph, session_id=session_id)
+        
+        end = time.time()
+        elapsed_time = end - start
+        
+        json_obj = {
+            'api_name': 'get_chat_history',
+            'db_url': uri,
+            'userName': userName,
+            'database': database,
+            'session_id': session_id,
+            'logging_time': formatted_time(datetime.now(timezone.utc)),
+            'elapsed_api_time': f'{elapsed_time:.2f}',
+            'email': email
+        }
+        logger.log_struct(json_obj, "INFO")
+        
+        return create_api_response('Success', data=result, message=f"Retrieved chat history for session {session_id}")
+        
+    except Exception as e:
+        job_status = "Failed"
+        message = "Unable to retrieve chat history"
+        error_message = str(e)
+        logging.exception(f'Exception in get_chat_history: {error_message}')
+        return create_api_response(job_status, message=message, error=error_message)
+    finally:
+        gc.collect()
+
+@app.post("/delete_chat_history")
+async def delete_chat_history_api(
+    uri: str = Form(None),
+    userName: str = Form(None),
+    password: str = Form(None),
+    database: str = Form(None),
+    session_id: str = Form(None),
+    email=Form(None)
+):
+    """
+    Delete a specific chat history by session ID.
+    """
+    try:
+        start = time.time()
+        
+        # Validate required parameters
+        if not uri or not userName or not password or not database:
+            return create_api_response(
+                'Failed', 
+                message="Missing required parameters: uri, userName, password, database",
+                error="Required parameters are missing"
+            )
+        
+        if not session_id:
+            return create_api_response(
+                'Failed',
+                message="Missing required parameter: session_id",
+                error="Session ID is required"
+            )
+        
+        graph = create_graph_database_connection(uri, userName, password, database)
+        result = await asyncio.to_thread(delete_chat_history, graph=graph, session_id=session_id)
+        
+        end = time.time()
+        elapsed_time = end - start
+        
+        json_obj = {
+            'api_name': 'delete_chat_history',
+            'db_url': uri,
+            'userName': userName,
+            'database': database,
+            'session_id': session_id,
+            'logging_time': formatted_time(datetime.now(timezone.utc)),
+            'elapsed_api_time': f'{elapsed_time:.2f}',
+            'email': email
+        }
+        logger.log_struct(json_obj, "INFO")
+        
+        return create_api_response('Success', data=result, message=f"Deleted chat history for session {session_id}")
+        
+    except Exception as e:
+        job_status = "Failed"
+        message = "Unable to delete chat history"
+        error_message = str(e)
+        logging.exception(f'Exception in delete_chat_history: {error_message}')
+        return create_api_response(job_status, message=message, error=error_message)
+    finally:
+        gc.collect()
+
 if __name__ == "__main__":
     uvicorn.run(app)

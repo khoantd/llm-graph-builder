@@ -118,7 +118,8 @@ def get_total_tokens(ai_response, llm):
 def clear_chat_history(graph, session_id,local=False):
     try:
         if not local:
-            history = Neo4jChatMessageHistory(
+            # Use the safe wrapper for Neo4jChatMessageHistory
+            history = SafeNeo4jChatMessageHistory(
                 graph=graph,
                 session_id=session_id
             )
@@ -634,14 +635,77 @@ def process_graph_response(model, graph, question, messages, history):
             "user": "chatbot"
         }
 
+class SafeNeo4jChatMessageHistory:
+    """
+    A wrapper around Neo4jChatMessageHistory that safely handles message retrieval
+    and prevents 'Got unexpected message type: None' errors.
+    """
+    
+    def __init__(self, graph, session_id):
+        self.neo4j_history = Neo4jChatMessageHistory(graph=graph, session_id=session_id)
+        self._cached_messages = None
+        self._messages_validated = False
+    
+    def _validate_and_cache_messages(self):
+        """Validate and cache messages to avoid repeated validation errors."""
+        if self._messages_validated:
+            return self._cached_messages
+            
+        try:
+            # Try to get messages from the underlying Neo4jChatMessageHistory
+            raw_messages = self.neo4j_history._messages if hasattr(self.neo4j_history, '_messages') else []
+            valid_messages = []
+            
+            for message in raw_messages:
+                if message and hasattr(message, 'type') and message.type is not None:
+                    valid_messages.append(message)
+                else:
+                    logging.warning(f"Skipping invalid message in session {self.neo4j_history.session_id}: {message}")
+            
+            self._cached_messages = valid_messages
+            self._messages_validated = True
+            logging.info(f"Successfully validated {len(valid_messages)} messages for session {self.neo4j_history.session_id}")
+            return valid_messages
+            
+        except Exception as e:
+            logging.error(f"Error validating messages for session {self.neo4j_history.session_id}: {e}")
+            self._cached_messages = []
+            self._messages_validated = True
+            return []
+    
+    @property
+    def messages(self):
+        """Safely return validated messages."""
+        return self._validate_and_cache_messages()
+    
+    def add_message(self, message):
+        """Add a message to the history."""
+        try:
+            self.neo4j_history.add_message(message)
+            # Invalidate cache to force re-validation
+            self._messages_validated = False
+            self._cached_messages = None
+        except Exception as e:
+            logging.error(f"Error adding message to history: {e}")
+    
+    def clear(self):
+        """Clear the chat history."""
+        try:
+            self.neo4j_history.clear()
+            self._cached_messages = []
+            self._messages_validated = True
+        except Exception as e:
+            logging.error(f"Error clearing history: {e}")
+
 def create_neo4j_chat_message_history(graph, session_id, write_access=True):
     """
-    Creates and returns a Neo4jChatMessageHistory instance.
+    Creates and returns a safe chat message history instance.
 
     """
     try:
         if write_access: 
-            history = Neo4jChatMessageHistory(
+            # Use the safe wrapper for Neo4jChatMessageHistory
+            history = SafeNeo4jChatMessageHistory(
                 graph=graph,
                 session_id=session_id
             )
@@ -651,7 +715,7 @@ def create_neo4j_chat_message_history(graph, session_id, write_access=True):
         return history
 
     except Exception as e:
-        logging.error(f"Error creating Neo4jChatMessageHistory: {e}")
+        logging.error(f"Error creating chat message history: {e}")
         # Return a fresh history object if there's an error
         return ChatMessageHistory()
 
@@ -680,20 +744,53 @@ def validate_and_clean_messages(history):
         list: Cleaned list of valid messages
     """
     try:
-        messages = history.messages
-        valid_messages = []
-        
-        for message in messages:
-            # Check if message has required attributes
-            if hasattr(message, 'type') and message.type is not None:
-                valid_messages.append(message)
-            else:
-                logging.warning(f"Skipping invalid message: {message}")
-                
-        return valid_messages
+        # For Neo4jChatMessageHistory, we need to handle the messages access more carefully
+        if hasattr(history, '_messages'):
+            # Access the raw messages directly to avoid LangChain validation
+            raw_messages = history._messages
+            valid_messages = []
+            
+            for message in raw_messages:
+                # Check if message has required attributes and is not None
+                if message and hasattr(message, 'type') and message.type is not None:
+                    valid_messages.append(message)
+                else:
+                    logging.warning(f"Skipping invalid message: {message}")
+                    
+            return valid_messages
+        else:
+            # For regular ChatMessageHistory, use the normal messages property
+            messages = history.messages
+            valid_messages = []
+            
+            for message in messages:
+                if hasattr(message, 'type') and message.type is not None:
+                    valid_messages.append(message)
+                else:
+                    logging.warning(f"Skipping invalid message: {message}")
+                    
+            return valid_messages
     except Exception as e:
         logging.error(f"Error validating messages: {e}")
         # Return empty list if validation fails
+        return []
+
+def safe_get_messages(history):
+    """
+    Safely retrieves messages from chat history, handling various error cases.
+    
+    Args:
+        history: ChatMessageHistory or Neo4jChatMessageHistory object
+        
+    Returns:
+        list: List of valid messages or empty list if error occurs
+    """
+    try:
+        # Try to get messages using the validate_and_clean_messages function
+        return validate_and_clean_messages(history)
+    except Exception as e:
+        logging.error(f"Error in safe_get_messages: {e}")
+        # If all else fails, return empty list
         return []
 
 def QA_RAG(graph,model, question, document_names, session_id, mode, write_access=True):
@@ -701,9 +798,10 @@ def QA_RAG(graph,model, question, document_names, session_id, mode, write_access
 
     history = create_neo4j_chat_message_history(graph, session_id, write_access)
     
-    # Validate and clean messages to prevent None message type errors
+    # Get messages safely - the SafeNeo4jChatMessageHistory wrapper handles validation
     try:
-        messages = validate_and_clean_messages(history)
+        messages = history.messages
+        logging.info(f"Successfully retrieved {len(messages)} messages from history")
     except Exception as e:
         logging.error(f"Error accessing chat history messages: {e}")
         # Create fresh history if there's an error
@@ -740,3 +838,176 @@ def QA_RAG(graph,model, question, document_names, session_id, mode, write_access
     result["session_id"] = session_id
     
     return result
+
+def get_chat_histories(graph, limit=50, offset=0):
+    """
+    Retrieves all chat histories from the Neo4j database with pagination.
+    
+    Args:
+        graph: Neo4jGraph instance
+        limit (int): Maximum number of chat histories to return (default: 50)
+        offset (int): Number of chat histories to skip (default: 0)
+        
+    Returns:
+        dict: Contains chat histories with metadata and pagination info
+    """
+    try:
+        logging.info(f"Retrieving chat histories with limit={limit}, offset={offset}")
+        
+        # Query to get all chat session IDs with their metadata
+        query = """
+        MATCH (s:__Session__)
+        RETURN s.sessionId as session_id,
+               s.createdAt as created_at,
+               s.updatedAt as updated_at,
+               size([(s)-[:HAS_MESSAGE]->(m) | m]) as message_count
+        ORDER BY s.updatedAt DESC
+        SKIP $offset
+        LIMIT $limit
+        """
+        
+        result = graph.query(query, {"limit": limit, "offset": offset})
+        
+        # Get total count for pagination
+        count_query = """
+        MATCH (s:__Session__)
+        RETURN count(s) as total_count
+        """
+        count_result = graph.query(count_query)
+        total_count = count_result[0]["total_count"] if count_result else 0
+        
+        # Process the results
+        chat_histories = []
+        for record in result:
+            chat_history = {
+                "session_id": record["session_id"],
+                "created_at": record["created_at"].isoformat() if record["created_at"] else None,
+                "updated_at": record["updated_at"].isoformat() if record["updated_at"] else None,
+                "message_count": record["message_count"]
+            }
+            chat_histories.append(chat_history)
+        
+        # Calculate pagination info
+        total_pages = (total_count + limit - 1) // limit if limit > 0 else 0
+        current_page = (offset // limit) + 1 if limit > 0 else 1
+        
+        response_data = {
+            "chat_histories": chat_histories,
+            "pagination": {
+                "total_count": total_count,
+                "total_pages": total_pages,
+                "current_page": current_page,
+                "limit": limit,
+                "offset": offset,
+                "has_next": offset + limit < total_count,
+                "has_previous": offset > 0
+            }
+        }
+        
+        logging.info(f"Successfully retrieved {len(chat_histories)} chat histories out of {total_count} total")
+        return response_data
+        
+    except Exception as e:
+        logging.error(f"Error retrieving chat histories: {e}")
+        raise Exception(f"Failed to retrieve chat histories: {str(e)}")
+
+def get_chat_history_by_session_id(graph, session_id):
+    """
+    Retrieves a specific chat history by session ID.
+    
+    Args:
+        graph: Neo4jGraph instance
+        session_id (str): The session ID to retrieve
+        
+    Returns:
+        dict: Contains chat history details and messages
+    """
+    try:
+        logging.info(f"Retrieving chat history for session: {session_id}")
+        
+        # Query to get session metadata
+        session_query = """
+        MATCH (s:__Session__ {sessionId: $session_id})
+        RETURN s.sessionId as session_id,
+               s.createdAt as created_at,
+               s.updatedAt as updated_at
+        """
+        
+        session_result = graph.query(session_query, {"session_id": session_id})
+        
+        if not session_result:
+            raise Exception(f"Chat history not found for session: {session_id}")
+        
+        session_data = session_result[0]
+        
+        # Query to get messages for this session
+        messages_query = """
+        MATCH (s:__Session__ {sessionId: $session_id})-[:HAS_MESSAGE]->(m:__Message__)
+        RETURN m.type as message_type,
+               m.content as content,
+               m.additionalKwargs as additional_kwargs,
+               m.createdAt as created_at
+        ORDER BY m.createdAt ASC
+        """
+        
+        messages_result = graph.query(messages_query, {"session_id": session_id})
+        
+        # Process messages
+        messages = []
+        for record in messages_result:
+            message = {
+                "type": record["message_type"],
+                "content": record["content"],
+                "additional_kwargs": record["additional_kwargs"] if record["additional_kwargs"] else {},
+                "created_at": record["created_at"].isoformat() if record["created_at"] else None
+            }
+            messages.append(message)
+        
+        response_data = {
+            "session_id": session_data["session_id"],
+            "created_at": session_data["created_at"].isoformat() if session_data["created_at"] else None,
+            "updated_at": session_data["updated_at"].isoformat() if session_data["updated_at"] else None,
+            "message_count": len(messages),
+            "messages": messages
+        }
+        
+        logging.info(f"Successfully retrieved chat history for session {session_id} with {len(messages)} messages")
+        return response_data
+        
+    except Exception as e:
+        logging.error(f"Error retrieving chat history for session {session_id}: {e}")
+        raise Exception(f"Failed to retrieve chat history: {str(e)}")
+
+def delete_chat_history(graph, session_id):
+    """
+    Deletes a specific chat history by session ID.
+    
+    Args:
+        graph: Neo4jGraph instance
+        session_id (str): The session ID to delete
+        
+    Returns:
+        dict: Success message
+    """
+    try:
+        logging.info(f"Deleting chat history for session: {session_id}")
+        
+        # Delete the session and all its messages
+        delete_query = """
+        MATCH (s:__Session__ {sessionId: $session_id})
+        OPTIONAL MATCH (s)-[:HAS_MESSAGE]->(m:__Message__)
+        DELETE m, s
+        """
+        
+        result = graph.query(delete_query, {"session_id": session_id})
+        
+        logging.info(f"Successfully deleted chat history for session {session_id}")
+        return {
+            "session_id": session_id,
+            "message": "Chat history deleted successfully",
+            "deleted": True
+        }
+        
+    except Exception as e:
+        logging.error(f"Error deleting chat history for session {session_id}: {e}")
+        raise Exception(f"Failed to delete chat history: {str(e)}")
