@@ -33,24 +33,28 @@ def get_graphDB_driver(uri, username, password,database="neo4j"):
         logging.error(error_message, exc_info=True)
 
 
-def execute_query(driver, query,document_names,doc_limit=None):
+def execute_query(driver, query, document_names, doc_limit=None):
     """
-    Executes a specified query using the Neo4j driver, with parameters based on the presence of a document name.
+    Executes a specified query using the Neo4j driver with document_names parameter.
+
+    Args:
+        driver: Neo4j driver instance
+        query (str): Cypher query to execute
+        document_names (list): List of document names to filter by
+        doc_limit (int, optional): Document limit (not used in current implementation)
 
     Returns:
     tuple: Contains records, summary of the execution, and keys of the records.
     """
     try:
-        if document_names:
-            logging.info(f"Executing query for documents: {document_names}")
-            records, summary, keys = driver.execute_query(query, document_names=document_names)
-        else:
-            logging.info(f"Executing query with a document limit of {doc_limit}")
-            records, summary, keys = driver.execute_query(query, doc_limit=doc_limit)
+        logging.info(f"Executing query for documents: {document_names}")
+        records, summary, keys = driver.execute_query(query, document_names=document_names)
         return records, summary, keys
     except Exception as e:
         error_message = f"graph_query module: Failed to execute the query. Error: {str(e)}"
         logging.error(error_message, exc_info=True)
+        # Re-raise the exception to be handled by the caller
+        raise
 
 
 def process_node(node):
@@ -185,7 +189,7 @@ def get_completed_documents(driver):
     return documents
 
 
-def get_graph_results(uri, username, password,database,document_names):
+def get_graph_results(uri, username, password, database, document_names):
     """
     Retrieves graph data by executing a specified Cypher query using credentials and parameters provided.
     Processes the results to extract nodes and relationships and packages them in a structured output.
@@ -194,18 +198,40 @@ def get_graph_results(uri, username, password,database,document_names):
     uri (str): The URI for the Neo4j database.
     username (str): The username for authentication.
     password (str): The password for authentication.
-    query_type (str): The type of query to be executed.
-    document_name (str, optional): The name of the document to specifically query for, if any. Default is None.
+    database (str): The database name.
+    document_names (str): JSON string containing list of document names.
 
     Returns:
     dict: Contains the session ID, user-defined messages with nodes and relationships, and the user module identifier.
     """
     try:
         logging.info(f"Starting graph query process")
-        driver = get_graphDB_driver(uri, username, password,database)  
-        document_names= list(map(str, json.loads(document_names)))
+        driver = get_graphDB_driver(uri, username, password, database)  
+        
+        # Validate and parse document_names
+        if not document_names or document_names.strip() == "" or document_names.lower() == "null":
+            logging.warning("document_names is empty, null, or not provided. Returning empty result.")
+            return {
+                "nodes": [],
+                "relationships": []
+            }
+        else:
+            try:
+                document_names_list = list(map(str, json.loads(document_names)))
+                logging.info(f"Parsed document_names: {document_names_list}")
+                
+                if not document_names_list:
+                    logging.warning("document_names list is empty. Returning empty result.")
+                    return {
+                        "nodes": [],
+                        "relationships": []
+                    }
+            except json.JSONDecodeError as json_error:
+                logging.error(f"Invalid JSON in document_names: {document_names}. Error: {json_error}")
+                raise ValueError(f"Invalid JSON format in document_names parameter: {document_names}")
+        
         query = GRAPH_QUERY.format(graph_chunk_limit=GRAPH_CHUNK_LIMIT)
-        records, summary , keys = execute_query(driver, query.strip(), document_names)
+        records, summary, keys = execute_query(driver, query.strip(), document_names_list)
         document_nodes = extract_node_elements(records)
         document_relationships = extract_relationships(records)
 

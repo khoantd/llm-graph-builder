@@ -496,6 +496,18 @@ async def graph_query(
 ):
     try:
         start = time.time()
+        
+        # Validate required parameters
+        if not uri or not userName or not password or not database:
+            return create_api_response(
+                'Failed', 
+                message="Missing required parameters: uri, userName, password, database",
+                error="Required parameters are missing"
+            )
+        
+        # Log the received document_names for debugging
+        logging.info(f"Received document_names: '{document_names}' (type: {type(document_names)})")
+        
         result = await asyncio.to_thread(
             get_graph_results,
             uri=uri,
@@ -509,6 +521,13 @@ async def graph_query(
         json_obj = {'api_name':'graph_query','db_url':uri, 'userName':userName, 'database':database, 'document_names':document_names, 'logging_time': formatted_time(datetime.now(timezone.utc)), 'elapsed_api_time':f'{elapsed_time:.2f}','email':email}
         logger.log_struct(json_obj, "INFO")
         return create_api_response('Success', data=result,message=f"Total elapsed API time {elapsed_time:.2f}")
+    except ValueError as ve:
+        # Handle validation errors (like invalid JSON)
+        job_status = "Failed"
+        message = "Invalid input parameters"
+        error_message = str(ve)
+        logging.error(f'Validation error in graph query: {error_message}')
+        return create_api_response(job_status, message=message, error=error_message)
     except Exception as e:
         job_status = "Failed"
         message = "Unable to get graph query response"
