@@ -179,12 +179,154 @@ To connect the frontend to this backend:
 
 ## 📚 API Endpoints
 
-Key endpoints available:
+### Core APIs
+- `POST /connect` - Connect to Neo4j database
+- `POST /upload` - Upload and process documents
+- `POST /schema` - Get database schema
+- `POST /graph_query` - Query the knowledge graph
+- `POST /chat_bot` - Chat with the knowledge graph
+- `POST /clear_chat_bot` - Clear chat history
 
-- `POST /upload-file` - Upload and process files
-- `POST /generate-graph` - Generate knowledge graph
-- `POST /chat` - Chat with processed data
-- `GET /files` - List processed files
-- `GET /health` - Health check
+### Chat History Management APIs
+- `POST /get_chat_histories` - Get all chat histories with pagination
+- `POST /get_chat_history` - Get specific chat history by session ID
+- `POST /delete_chat_history` - Delete specific chat history by session ID
 
-For complete API documentation, visit http://localhost:8000/docs when the backend is running.
+### Health & Status
+- `GET /health` - Health check endpoint
+
+## Chat History Management
+
+The backend now includes comprehensive chat history management capabilities:
+
+### Get All Chat Histories
+```bash
+curl -X POST "http://localhost:8000/get_chat_histories" \
+  -F "uri=neo4j://localhost:7687" \
+  -F "userName=neo4j" \
+  -F "password=password" \
+  -F "database=neo4j" \
+  -F "limit=10" \
+  -F "offset=0"
+```
+
+**Parameters:**
+- `uri`, `userName`, `password`, `database` (required) - Neo4j connection details
+- `limit` (optional, default: 50) - Maximum number of chat histories to return (1-100)
+- `offset` (optional, default: 0) - Number of chat histories to skip for pagination
+- `email` (optional) - User email for logging
+
+**Response:**
+```json
+{
+  "status": "Success",
+  "data": {
+    "chat_histories": [
+      {
+        "session_id": "session_123",
+        "created_at": "2024-01-01T10:00:00",
+        "updated_at": "2024-01-01T10:30:00",
+        "message_count": 5
+      }
+    ],
+    "pagination": {
+      "total_count": 25,
+      "total_pages": 3,
+      "current_page": 1,
+      "limit": 10,
+      "offset": 0,
+      "has_next": true,
+      "has_previous": false
+    }
+  },
+  "message": "Retrieved 10 chat histories"
+}
+```
+
+### Get Specific Chat History
+```bash
+curl -X POST "http://localhost:8000/get_chat_history" \
+  -F "uri=neo4j://localhost:7687" \
+  -F "userName=neo4j" \
+  -F "password=password" \
+  -F "database=neo4j" \
+  -F "session_id=session_123"
+```
+
+**Parameters:**
+- `uri`, `userName`, `password`, `database` (required) - Neo4j connection details
+- `session_id` (required) - The session ID to retrieve
+- `email` (optional) - User email for logging
+
+**Response:**
+```json
+{
+  "status": "Success",
+  "data": {
+    "session_id": "session_123",
+    "created_at": "2024-01-01T10:00:00",
+    "updated_at": "2024-01-01T10:30:00",
+    "message_count": 5,
+    "messages": [
+      {
+        "type": "human",
+        "content": "Hello, how are you?",
+        "additional_kwargs": {},
+        "created_at": "2024-01-01T10:00:00"
+      },
+      {
+        "type": "ai",
+        "content": "I'm doing well, thank you!",
+        "additional_kwargs": {},
+        "created_at": "2024-01-01T10:00:05"
+      }
+    ]
+  },
+  "message": "Retrieved chat history for session session_123"
+}
+```
+
+### Delete Chat History
+```bash
+curl -X POST "http://localhost:8000/delete_chat_history" \
+  -F "uri=neo4j://localhost:7687" \
+  -F "userName=neo4j" \
+  -F "password=password" \
+  -F "database=neo4j" \
+  -F "session_id=session_123"
+```
+
+**Parameters:**
+- `uri`, `userName`, `password`, `database` (required) - Neo4j connection details
+- `session_id` (required) - The session ID to delete
+- `email` (optional) - User email for logging
+
+**Response:**
+```json
+{
+  "status": "Success",
+  "data": {
+    "session_id": "session_123",
+    "message": "Chat history deleted successfully",
+    "deleted": true
+  },
+  "message": "Deleted chat history for session session_123"
+}
+```
+
+## Testing Chat History APIs
+
+Run the comprehensive test script to validate all chat history functionality:
+
+```bash
+cd backend
+python3 test_chat_histories_api.py
+```
+
+This test script covers:
+- ✅ Get all chat histories with pagination
+- ✅ Get specific chat history by session ID
+- ✅ Delete chat history by session ID
+- ✅ Error handling and validation
+- ✅ Pagination functionality
+- ✅ CRUD operations verification
