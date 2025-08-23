@@ -35,9 +35,12 @@ from langchain_community.chat_models import ChatOllama
 from src.llm import get_llm
 from src.shared.common_fn import load_embedding_model
 from src.shared.constants import *
-load_dotenv() 
+from src.environment_config import get_env_var, env_config
 
-EMBEDDING_MODEL = os.getenv('EMBEDDING_MODEL')
+# Load environment configuration
+env_config.log_configuration_summary()
+
+EMBEDDING_MODEL = get_env_var('EMBEDDING_MODEL', 'all-MiniLM-L6-v2')
 EMBEDDING_FUNCTION , _ = load_embedding_model(EMBEDDING_MODEL) 
 
 class SessionChatHistory:
@@ -430,7 +433,7 @@ def setup_chat(model, graph, document_names, chat_mode_settings):
     start_time = time.time()
     try:
         if model == "diffbot":
-            model = os.getenv('DEFAULT_DIFFBOT_CHAT_MODEL')
+            model = get_env_var('DEFAULT_DIFFBOT_CHAT_MODEL', 'openai_gpt_4o')
         
         llm, model_name = get_llm(model=model)
         logging.info(f"Model called in chat: {model} (version: {model_name})")

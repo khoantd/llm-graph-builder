@@ -34,8 +34,10 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from langchain_neo4j import Neo4jGraph
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.requests import Request
-from dotenv import load_dotenv
-load_dotenv(override=True)
+from src.environment_config import get_env_var, env_config
+
+# Initialize environment configuration
+env_config.log_configuration_summary()
 
 logger = CustomLogger()
 CHUNK_DIR = os.path.join(os.path.dirname(__file__), "chunks")

@@ -17,12 +17,13 @@ from src.shared.constants import ADDITIONAL_INSTRUCTIONS
 from src.shared.llm_graph_builder_exception import LLMGraphBuilderException
 import re
 from typing import List
+from src.environment_config import get_env_var
 
 def get_llm(model: str):
     """Retrieve the specified language model based on the model name."""
     model = model.lower().strip()
     env_key = f"LLM_MODEL_CONFIG_{model}"
-    env_value = os.environ.get(env_key)
+    env_value = get_env_var(env_key)
 
     if not env_value:
         err = f"Environment variable '{env_key}' is not defined as per format or missing"
@@ -101,32 +102,21 @@ def get_llm(model: str):
             )
 
         elif "ollama" in model:
-            model_name, base_url = env_value.split(",")
-            llm = ChatOllama(base_url=base_url, model=model_name)
+            model_name, model_url = env_value.split(",")
+            llm = ChatOllama(model=model_name, base_url=model_url)
 
         elif "diffbot" in model:
-            #model_name = "diffbot"
             model_name, api_key = env_value.split(",")
-            llm = DiffbotGraphTransformer(
-                diffbot_api_key=api_key,
-                extract_types=["entities", "facts"],
-            )
-        
-        else: 
-            model_name, api_endpoint, api_key = env_value.split(",")
-            llm = ChatOpenAI(
-                api_key=api_key,
-                base_url=api_endpoint,
-                model=model_name,
-                temperature=0,
-            )
+            llm = DiffbotGraphTransformer(api_key=api_key)
+
+        else:
+            raise Exception(f"Unsupported model type: {model}")
+
+        return llm, model_name
+
     except Exception as e:
-        err = f"Error while creating LLM '{model}': {str(e)}"
-        logging.error(err)
-        raise Exception(err)
- 
-    logging.info(f"Model created - Model Version: {model}")
-    return llm, model_name
+        logging.error(f"Error creating LLM instance for model {model}: {e}")
+        raise Exception(f"Failed to create LLM instance: {str(e)}")
 
 def get_llm_model_name(llm):
     """Extract name of llm model from llm object"""

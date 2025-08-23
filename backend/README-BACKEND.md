@@ -330,3 +330,298 @@ This test script covers:
 - ✅ Error handling and validation
 - ✅ Pagination functionality
 - ✅ CRUD operations verification
+
+## 🔑 API Key Configuration
+
+### OpenAI API Key Setup
+
+The application requires proper API key configuration to function. Follow these steps:
+
+1. **Create `.env` file**:
+   ```bash
+   cp example.env .env
+   ```
+
+2. **Configure OpenAI API Key**:
+   ```bash
+   # Edit .env file and set your OpenAI API key
+   OPENAI_API_KEY="sk-your-actual-openai-api-key-here"
+   ```
+
+3. **Configure LLM Model**:
+   ```bash
+   # Set the default chat model (must match LLM_MODEL_CONFIG format)
+   DEFAULT_DIFFBOT_CHAT_MODEL="openai_gpt_4o"
+   
+   # Configure the model with API key
+   LLM_MODEL_CONFIG_openai_gpt_4o="gpt-4o-2024-11-20,sk-your-actual-openai-api-key-here"
+   ```
+
+### Alternative Models
+
+You can use other models by configuring the appropriate environment variables:
+
+```bash
+# For GPT-3.5
+LLM_MODEL_CONFIG_openai_gpt_3.5="gpt-3.5-turbo-0125,sk-your-actual-openai-api-key-here"
+
+# For GPT-4o Mini
+LLM_MODEL_CONFIG_openai_gpt_4o_mini="gpt-4o-mini-2024-07-18,sk-your-actual-openai-api-key-here"
+
+# For Gemini (requires Google Cloud setup)
+LLM_MODEL_CONFIG_gemini_1.5_pro="gemini-1.5-pro-002"
+GEMINI_ENABLED=True
+
+# For Anthropic Claude
+LLM_MODEL_CONFIG_anthropic_claude_4_sonnet="claude-sonnet-4-20250514,sk-your-anthropic-api-key-here"
+```
+
+### Troubleshooting Authentication Errors
+
+#### Error: `AuthenticationError: Error code: 401 - Incorrect API key provided`
+
+**Root Cause**: The API key is either missing, incorrect, or not properly configured.
+
+**Solutions**:
+
+1. **Check API Key Format**:
+   ```bash
+   # OpenAI API keys should start with 'sk-'
+   OPENAI_API_KEY="sk-1234567890abcdef..."
+   ```
+
+2. **Verify Environment Variables**:
+   ```bash
+   # Check if .env file exists and has correct values
+   cat .env | grep OPENAI_API_KEY
+   cat .env | grep LLM_MODEL_CONFIG
+   ```
+
+3. **Test API Key**:
+   ```bash
+   # Test your OpenAI API key
+   curl -H "Authorization: Bearer sk-your-api-key" \
+        https://api.openai.com/v1/models
+   ```
+
+4. **Check Model Configuration**:
+   ```bash
+   # Ensure model config matches the default model
+   echo $DEFAULT_DIFFBOT_CHAT_MODEL
+   echo $LLM_MODEL_CONFIG_openai_gpt_4o
+   ```
+
+5. **Restart Application**:
+   ```bash
+   # After updating .env, restart the application
+   docker-compose down
+   docker-compose up -d
+   ```
+
+#### Common Issues and Fixes
+
+| Issue | Cause | Fix |
+|-------|-------|-----|
+| `401 AuthenticationError` | Invalid or missing API key | Set correct API key in `.env` |
+| `Model not found` | Incorrect model name | Check model name in OpenAI API |
+| `Rate limit exceeded` | Too many requests | Wait or upgrade API plan |
+| `Insufficient quota` | API quota exceeded | Check OpenAI account billing |
+
+### Environment Variables Checklist
+
+Before starting the application, ensure these are set:
+
+```bash
+# Required for OpenAI models
+OPENAI_API_KEY="sk-your-api-key"
+DEFAULT_DIFFBOT_CHAT_MODEL="openai_gpt_4o"
+LLM_MODEL_CONFIG_openai_gpt_4o="gpt-4o-2024-11-20,sk-your-api-key"
+
+# Required for Neo4j
+NEO4J_URI="neo4j://localhost:7687"
+NEO4J_USERNAME="neo4j"
+NEO4J_PASSWORD="your-password"
+NEO4J_DATABASE="neo4j"
+
+# Optional but recommended
+EMBEDDING_MODEL="all-MiniLM-L6-v2"
+GCS_FILE_CACHE="False"
+```
+
+### Testing Configuration
+
+Run the configuration test script:
+
+```bash
+python3 test_configuration.py
+```
+
+This will verify:
+- ✅ API key validity
+- ✅ Model accessibility
+- ✅ Neo4j connection
+- ✅ Environment variables
+
+## 🔧 Enhanced Environment Configuration
+
+The application now uses an enhanced environment configuration system that properly handles environment variable precedence for Docker deployments.
+
+### Environment Variable Precedence
+
+The system follows this precedence order (highest to lowest priority):
+
+1. **System Environment Variables** (highest priority)
+2. **`.env` file** (fallback)
+3. **Default values** (lowest priority)
+
+This ensures that Docker environment variables take precedence over `.env` file values, which is the standard practice for containerized applications.
+
+### Configuration Loading
+
+The application automatically loads environment variables in the correct order:
+
+```python
+# System environment variables are checked first
+# .env file is loaded as fallback (doesn't override system vars)
+# Default values are used as last resort
+```
+
+### Usage Examples
+
+#### Docker Deployment
+```bash
+# Docker environment variables take precedence
+docker run -e OPENAI_API_KEY="sk-your-key" -e NEO4J_PASSWORD="your-password" your-image
+```
+
+#### Local Development
+```bash
+# .env file is used as fallback
+cp example.env .env
+# Edit .env with your values
+```
+
+#### Hybrid Setup
+```bash
+# System variables override .env file
+export OPENAI_API_KEY="sk-your-key"
+# .env file provides other variables
+```
+
+### Environment Configuration Module
+
+The application includes a robust environment configuration module (`src/environment_config.py`) that provides:
+
+- **Automatic precedence handling**
+- **Type conversion** (bool, int, float)
+- **Required variable validation**
+- **Configuration summaries**
+- **Graceful error handling**
+
+#### Key Features
+
+```python
+from src.environment_config import get_env_var, get_env_bool, get_env_int
+
+# Get environment variables with proper precedence
+api_key = get_env_var('OPENAI_API_KEY', required=True)
+debug_mode = get_env_bool('DEBUG', False)
+port = get_env_int('PORT', 8000)
+```
+
+#### Configuration Validation
+
+```python
+# Validate required variables
+required_vars = ['OPENAI_API_KEY', 'NEO4J_PASSWORD']
+config.validate_required_vars(required_vars)
+```
+
+### Testing Environment Configuration
+
+Run the environment configuration tests:
+
+```bash
+python3 test_environment_config.py
+```
+
+This validates:
+- ✅ Environment variable precedence
+- ✅ Type conversions
+- ✅ Required variable validation
+- ✅ Missing file handling
+- ✅ Configuration loading
+
+### Docker Environment Variables
+
+When using Docker, you can set environment variables in several ways:
+
+#### Docker Compose
+```yaml
+version: '3.8'
+services:
+  backend:
+    image: llm-graph-builder-backend:latest
+    environment:
+      - OPENAI_API_KEY=sk-your-key
+      - NEO4J_PASSWORD=your-password
+      - DEFAULT_DIFFBOT_CHAT_MODEL=openai_gpt_4o
+```
+
+#### Docker Run
+```bash
+docker run -e OPENAI_API_KEY="sk-your-key" \
+           -e NEO4J_PASSWORD="your-password" \
+           -e DEFAULT_DIFFBOT_CHAT_MODEL="openai_gpt_4o" \
+           your-image
+```
+
+#### Environment File
+```bash
+# Create .env file for docker-compose
+echo "OPENAI_API_KEY=sk-your-key" > .env
+echo "NEO4J_PASSWORD=your-password" >> .env
+docker-compose up
+```
+
+### Troubleshooting Environment Issues
+
+#### Check Environment Variables
+```bash
+# Test environment configuration
+python3 test_environment_config.py
+
+# Check system environment
+env | grep OPENAI
+env | grep NEO4J
+
+# Check .env file
+cat .env | grep -v "^#"
+```
+
+#### Common Issues
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| Variables not loading | Wrong precedence order | Use enhanced config module |
+| Docker vars ignored | .env file overriding | System vars take precedence |
+| Missing variables | Not set anywhere | Set in Docker or .env file |
+| Type errors | Wrong variable type | Use type conversion functions |
+
+#### Debug Configuration
+
+The application logs configuration details on startup:
+
+```
+🔧 Environment Configuration Summary
+============================================================
+📋 OPENAI_API_KEY: sk-1234567890...
+📋 DEFAULT_DIFFBOT_CHAT_MODEL: openai_gpt_4o
+📋 EMBEDDING_MODEL: all-MiniLM-L6-v2
+📋 NEO4J_URI: neo4j://localhost:7687
+📋 NEO4J_USERNAME: neo4j
+📋 NEO4J_DATABASE: neo4j
+⚠️  GEMINI_ENABLED: Not set
+⚠️  GCS_FILE_CACHE: Not set
+============================================================
+```
