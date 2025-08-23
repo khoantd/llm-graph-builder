@@ -625,3 +625,435 @@ The application logs configuration details on startup:
 ⚠️  GCS_FILE_CACHE: Not set
 ============================================================
 ```
+
+## 🐳 Enhanced Docker Deployment with Persistent Volumes
+
+The application now includes comprehensive Docker deployment options with persistent data volumes for production-ready deployments.
+
+### 📁 Persistent Data Volumes
+
+The application uses the following persistent data volumes:
+
+| Volume | Purpose | Path |
+|--------|---------|------|
+| `data` | General application data | `/code/data` |
+| `chunks` | Document chunks | `/code/chunks` |
+| `merged_files` | Merged document files | `/code/merged_files` |
+| `logs` | Application logs | `/code/logs` |
+| `cache` | Application cache | `/code/cache` |
+| `uploads` | File uploads | `/code/uploads` |
+| `models` | ML models and embeddings | `/code/models` |
+| `temp` | Temporary files | `/code/temp` |
+
+### 🚀 Deployment Options
+
+#### 1. Development Deployment (Local Bind Mounts)
+
+```bash
+# Use development configuration
+docker-compose -f docker-compose.development.yml up -d
+
+# Or use the enhanced run script
+./run-backend-with-volumes.sh start
+```
+
+**Features:**
+- ✅ Local directory bind mounts
+- ✅ Live code reloading
+- ✅ Easy debugging
+- ✅ Direct file access
+
+#### 2. Production Deployment (Docker Volumes)
+
+```bash
+# Create persistent volumes first
+./manage-volumes.sh create
+
+# Use production configuration
+docker-compose -f docker-compose.production.yml up -d
+```
+
+**Features:**
+- ✅ External Docker volumes
+- ✅ Data persistence across container restarts
+- ✅ Resource limits and health checks
+- ✅ Production logging
+
+#### 3. Standard Deployment (Mixed Volumes)
+
+```bash
+# Use standard configuration
+docker-compose -f docker-compose.backend.yml up -d
+```
+
+**Features:**
+- ✅ Local bind mounts for development
+- ✅ Docker volumes for production
+- ✅ Flexible configuration
+
+### 📋 Volume Management
+
+#### Volume Management Script
+
+Use the volume management script for comprehensive volume operations:
+
+```bash
+# Create volumes and directories
+./manage-volumes.sh create
+
+# List volume status
+./manage-volumes.sh list
+
+# Create backup
+./manage-volumes.sh backup
+
+# Restore from backup
+./manage-volumes.sh restore backup_20240101_120000
+
+# Show usage statistics
+./manage-volumes.sh usage
+
+# Clean all volumes (DESTRUCTIVE)
+./manage-volumes.sh clean
+```
+
+#### Enhanced Docker Run Script
+
+Use the enhanced run script for complete container management:
+
+```bash
+# Start container with volumes
+./run-backend-with-volumes.sh start
+
+# Check container status
+./run-backend-with-volumes.sh status
+
+# View logs
+./run-backend-with-volumes.sh logs
+
+# Open shell in container
+./run-backend-with-volumes.sh shell
+
+# Create backup
+./run-backend-with-volumes.sh backup
+
+# Stop container
+./run-backend-with-volumes.sh stop
+
+# Restart container
+./run-backend-with-volumes.sh restart
+```
+
+### 🔧 Docker Compose Configurations
+
+#### Development Configuration (`docker-compose.development.yml`)
+
+```yaml
+version: '3.8'
+services:
+  backend:
+    image: llm-graph-builder-backend:latest
+    container_name: llm-graph-builder-backend-dev
+    ports:
+      - "8000:8000"
+    environment:
+      - NODE_ENV=development
+      - DEBUG=true
+    volumes:
+      # Local bind mounts for development
+      - ./data:/code/data
+      - ./chunks:/code/chunks
+      - ./merged_files:/code/merged_files
+      - ./logs:/code/logs
+      - ./cache:/code/cache
+      - ./uploads:/code/uploads
+      - ./models:/code/models
+      - ./temp:/code/temp
+      
+      # Source code for live reloading
+      - ./src:/code/src
+      - ./score.py:/code/score.py
+```
+
+#### Production Configuration (`docker-compose.production.yml`)
+
+```yaml
+version: '3.8'
+services:
+  backend:
+    image: llm-graph-builder-backend:latest
+    container_name: llm-graph-builder-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - NODE_ENV=production
+    volumes:
+      # External persistent volumes
+      - llm_graph_data:/code/data
+      - llm_graph_chunks:/code/chunks
+      - llm_graph_merged:/code/merged_files
+      - llm_graph_logs:/code/logs
+      - llm_graph_cache:/code/cache
+      - llm_graph_uploads:/code/uploads
+      - llm_graph_models:/code/models
+      - llm_graph_temp:/code/temp
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: '4.0'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+volumes:
+  llm_graph_data:
+    external: true
+  llm_graph_chunks:
+    external: true
+  # ... other volumes
+```
+
+### 🔄 Data Persistence Strategies
+
+#### 1. Local Bind Mounts (Development)
+
+```bash
+# Mount local directories directly
+docker run -v $(pwd)/data:/code/data \
+           -v $(pwd)/chunks:/code/chunks \
+           -v $(pwd)/logs:/code/logs \
+           your-image
+```
+
+**Pros:**
+- ✅ Easy debugging
+- ✅ Direct file access
+- ✅ Live code reloading
+- ✅ Simple backup/restore
+
+**Cons:**
+- ❌ Platform-specific paths
+- ❌ Less portable
+
+#### 2. Docker Named Volumes (Production)
+
+```bash
+# Create named volumes
+docker volume create llm_graph_data
+docker volume create llm_graph_chunks
+
+# Use named volumes
+docker run -v llm_graph_data:/code/data \
+           -v llm_graph_chunks:/code/chunks \
+           your-image
+```
+
+**Pros:**
+- ✅ Platform-independent
+- ✅ Managed by Docker
+- ✅ Easy migration
+- ✅ Better performance
+
+**Cons:**
+- ❌ Less direct access
+- ❌ Requires Docker commands for backup
+
+#### 3. External Volumes (Enterprise)
+
+```bash
+# Use external storage
+docker run -v /mnt/storage/llm_data:/code/data \
+           -v /mnt/storage/llm_chunks:/code/chunks \
+           your-image
+```
+
+**Pros:**
+- ✅ Enterprise storage integration
+- ✅ High availability
+- ✅ Advanced backup solutions
+- ✅ Scalable storage
+
+**Cons:**
+- ❌ Complex setup
+- ❌ Requires storage expertise
+
+### 📊 Backup and Recovery
+
+#### Automated Backup
+
+```bash
+# Create backup with timestamp
+./manage-volumes.sh backup
+
+# Output: backup_20240101_120000/
+# ├── data.tar.gz
+# ├── chunks.tar.gz
+# ├── merged_files.tar.gz
+# ├── logs.tar.gz
+# ├── cache.tar.gz
+# ├── uploads.tar.gz
+# ├── models.tar.gz
+# └── temp.tar.gz
+```
+
+#### Restore from Backup
+
+```bash
+# Restore from specific backup
+./manage-volumes.sh restore backup_20240101_120000
+```
+
+#### Manual Backup
+
+```bash
+# Manual backup of specific directories
+tar -czf backup_data.tar.gz data/
+tar -czf backup_chunks.tar.gz chunks/
+tar -czf backup_models.tar.gz models/
+```
+
+### 🔍 Monitoring and Maintenance
+
+#### Volume Usage Monitoring
+
+```bash
+# Check volume usage
+./manage-volumes.sh usage
+
+# Output:
+# Volume Usage Statistics
+# ================================
+# data: 256MB
+# chunks: 1.2GB
+# merged_files: 512MB
+# logs: 45MB
+# cache: 128MB
+# uploads: 64MB
+# models: 2.1GB
+# temp: 32MB
+# Total size: 4.3GB
+```
+
+#### Container Health Monitoring
+
+```bash
+# Check container health
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+# View health check logs
+docker inspect llm-graph-builder-backend | jq '.[0].State.Health'
+```
+
+#### Log Management
+
+```bash
+# View application logs
+docker logs -f llm-graph-builder-backend
+
+# View logs with timestamps
+docker logs -f --timestamps llm-graph-builder-backend
+
+# View logs for specific time period
+docker logs --since "2024-01-01T00:00:00" llm-graph-builder-backend
+```
+
+### 🚀 Quick Start Guide
+
+#### 1. Development Setup
+
+```bash
+# Clone and setup
+git clone <repository>
+cd backend
+
+# Create environment file
+cp example.env .env
+# Edit .env with your configuration
+
+# Start with development volumes
+./run-backend-with-volumes.sh start
+
+# Check status
+./run-backend-with-volumes.sh status
+```
+
+#### 2. Production Setup
+
+```bash
+# Create persistent volumes
+./manage-volumes.sh create
+
+# Start production deployment
+docker-compose -f docker-compose.production.yml up -d
+
+# Monitor deployment
+docker-compose -f docker-compose.production.yml logs -f
+```
+
+#### 3. Backup Strategy
+
+```bash
+# Create regular backups
+0 2 * * * /path/to/backend/manage-volumes.sh backup
+
+# Clean old backups (keep last 7 days)
+find ./backup_* -type d -mtime +7 -exec rm -rf {} \;
+```
+
+### 🔧 Troubleshooting
+
+#### Common Issues
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| Permission denied | Volume permissions | `chmod 755 data/ chunks/ logs/` |
+| Volume not found | Volume not created | `./manage-volumes.sh create` |
+| Data loss | Volume not mounted | Check volume mounts in docker-compose |
+| Performance issues | Resource limits | Adjust memory/CPU limits |
+| Backup fails | Insufficient space | Check disk space and cleanup |
+
+#### Volume Inspection
+
+```bash
+# Inspect Docker volumes
+docker volume inspect llm_graph_data
+
+# Check volume mount points
+docker inspect llm-graph-builder-backend | jq '.[0].Mounts'
+
+# Verify data persistence
+docker exec llm-graph-builder-backend ls -la /code/data
+```
+
+### 📈 Performance Optimization
+
+#### Resource Allocation
+
+```yaml
+deploy:
+  resources:
+    limits:
+      memory: 8G      # Adjust based on workload
+      cpus: '4.0'     # Adjust based on CPU cores
+    reservations:
+      memory: 4G      # Minimum memory guarantee
+      cpus: '2.0'     # Minimum CPU guarantee
+```
+
+#### Volume Performance
+
+```bash
+# Use SSD storage for high-performance volumes
+docker run -v /ssd/data:/code/data \
+           -v /ssd/cache:/code/cache \
+           your-image
+
+# Use tmpfs for temporary data
+docker run --tmpfs /code/temp \
+           your-image
+```
+
+The enhanced Docker deployment provides comprehensive data persistence, backup capabilities, and monitoring tools for both development and production environments.

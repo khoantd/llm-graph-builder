@@ -1,0 +1,8 @@
+{
+  "timestamp": 1755920288.146395,
+  "message": "Test data for persistence validation",
+  "metadata": {
+    "test_type": "volume_persistence",
+    "version": "1.0"
+  }
+}

@@ -697,6 +697,33 @@ class SafeNeo4jChatMessageHistory:
         except Exception as e:
             logging.error(f"Error adding message to history: {e}")
     
+    def add_user_message(self, message):
+        """Add a user message to the history."""
+        try:
+            from langchain_core.messages import HumanMessage
+            user_message = HumanMessage(content=message)
+            self.add_message(user_message)
+        except Exception as e:
+            logging.error(f"Error adding user message to history: {e}")
+    
+    def add_ai_message(self, message):
+        """Add an AI message to the history."""
+        try:
+            from langchain_core.messages import AIMessage
+            ai_message = AIMessage(content=message)
+            self.add_message(ai_message)
+        except Exception as e:
+            logging.error(f"Error adding AI message to history: {e}")
+    
+    def add_system_message(self, message):
+        """Add a system message to the history."""
+        try:
+            from langchain_core.messages import SystemMessage
+            system_message = SystemMessage(content=message)
+            self.add_message(system_message)
+        except Exception as e:
+            logging.error(f"Error adding system message to history: {e}")
+    
     def clear(self):
         """Clear the chat history."""
         try:
@@ -705,6 +732,18 @@ class SafeNeo4jChatMessageHistory:
             self._messages_validated = True
         except Exception as e:
             logging.error(f"Error clearing history: {e}")
+    
+    def __len__(self):
+        """Return the number of messages in the history."""
+        return len(self.messages)
+    
+    def __iter__(self):
+        """Iterate over messages in the history."""
+        return iter(self.messages)
+    
+    def __getitem__(self, index):
+        """Get a message by index."""
+        return self.messages[index]
 
 def create_neo4j_chat_message_history(graph, session_id, write_access=True):
     """

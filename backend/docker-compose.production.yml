@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  backend:
+    image: llm-graph-builder-backend:latest
+    container_name: llm-graph-builder-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - PORT=8000
+      - NODE_ENV=production
+    volumes:
+      # External persistent volumes for production
+      - llm_graph_data:/code/data
+      - llm_graph_chunks:/code/chunks
+      - llm_graph_merged:/code/merged_files
+      - llm_graph_logs:/code/logs
+      - llm_graph_cache:/code/cache
+      - llm_graph_uploads:/code/uploads
+      - llm_graph_models:/code/models
+      - llm_graph_temp:/code/temp
+      
+      # Configuration files (read-only)
+      - ./example.env:/code/example.env:ro
+      
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+          cpus: '4.0'
+        reservations:
+          memory: 4G
+          cpus: '2.0'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+volumes:
+  # External persistent volumes for production
+  llm_graph_data:
+    external: true
+  llm_graph_chunks:
+    external: true
+  llm_graph_merged:
+    external: true
+  llm_graph_logs:
+    external: true
+  llm_graph_cache:
+    external: true
+  llm_graph_uploads:
+    external: true
+  llm_graph_models:
+    external: true
+  llm_graph_temp:
+    external: true
